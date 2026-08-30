@@ -1,0 +1,112 @@
+blueprint:
+  name: Motion Light with Auto Ownership
+  description: >-
+    Turns lights on when motion is detected in low light and turns them off
+    after a configurable period without motion, but only when this automation
+    switched them on.
+  domain: automation
+  author: BennyPirates
+  source_url: https://raw.githubusercontent.com/BennyPirates/home-assistant-motion-light-blueprints/main/blueprints/motion_light_auto_ownership.yaml
+  homeassistant:
+    min_version: "2024.10.0"
+  input:
+    devices:
+      name: Devices
+      icon: mdi:motion-sensor
+      input:
+        motion_sensor:
+          name: Motion sensor
+          selector:
+            entity:
+              domain: binary_sensor
+        illuminance_sensor:
+          name: Illuminance sensor
+          selector:
+            entity:
+              domain: sensor
+        target_lights:
+          name: Light(s) to control
+          selector:
+            entity:
+              domain: light
+              multiple: true
+        auto_flag:
+          name: Automatic-light flag
+          description: Set only while this automation owns the light state.
+          selector:
+            entity:
+              domain: input_boolean
+    settings:
+      name: Settings
+      icon: mdi:cog
+      collapsed: true
+      input:
+        illuminance_threshold:
+          name: Illuminance threshold
+          description: Lights turn on only below this value.
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 10000
+              step: 1
+              unit_of_measurement: lx
+              mode: box
+        no_motion_wait:
+          name: No-motion wait time
+          description: Time to keep the lights on after motion clears.
+          default: 300
+          selector:
+            number:
+              min: 0
+              max: 3600
+              step: 30
+              unit_of_measurement: seconds
+              mode: box
+
+mode: restart
+max_exceeded: silent
+
+triggers:
+  - trigger: state
+    entity_id: !input motion_sensor
+    to: "on"
+    id: motion_detected
+  - trigger: state
+    entity_id: !input motion_sensor
+    to: "off"
+    for:
+      seconds: !input no_motion_wait
+    id: no_motion_timeout
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: motion_detected
+          - condition: state
+            entity_id: !input target_lights
+            state: "off"
+          - condition: numeric_state
+            entity_id: !input illuminance_sensor
+            below: !input illuminance_threshold
+        sequence:
+          - action: input_boolean.turn_on
+            target:
+              entity_id: !input auto_flag
+          - action: light.turn_on
+            target:
+              entity_id: !input target_lights
+      - conditions:
+          - condition: trigger
+            id: no_motion_timeout
+          - condition: state
+            entity_id: !input auto_flag
+            state: "on"
+        sequence:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: !input auto_flag
+          - action: light.turn_off
+            target:
+              entity_id: !input target_lights
