@@ -24,6 +24,13 @@ blueprint:
           selector:
             entity:
               domain: sensor
+        guard_lights:
+          name: Lights that must be off
+          description: The automation starts only when every selected light is off.
+          selector:
+            entity:
+              domain: light
+              multiple: true
         target_lights:
           name: Light(s) to control
           selector:
@@ -85,7 +92,7 @@ actions:
           - condition: trigger
             id: motion_detected
           - condition: state
-            entity_id: !input target_lights
+            entity_id: !input guard_lights
             state: "off"
           - condition: numeric_state
             entity_id: !input illuminance_sensor
