@@ -3,7 +3,8 @@ blueprint:
   description: >-
     Turns lights on when motion is detected in low light and turns them off
     after a configurable period without motion, but only when this automation
-    switched them on.
+    switched them on. Failed turn-off commands are retried, and ownership is
+    retained until every controlled light reports off.
   domain: automation
   author: BennyPirates
   source_url: https://raw.githubusercontent.com/BennyPirates/home-assistant-motion-light-blueprints/main/blueprints/motion_light_auto_ownership.yaml
@@ -111,9 +112,20 @@ actions:
             entity_id: !input auto_flag
             state: "on"
         sequence:
-          - action: input_boolean.turn_off
-            target:
-              entity_id: !input auto_flag
-          - action: light.turn_off
-            target:
-              entity_id: !input target_lights
+          - repeat:
+              count: 3
+              sequence:
+                - action: light.turn_off
+                  target:
+                    entity_id: !input target_lights
+                  continue_on_error: true
+                - delay:
+                    seconds: 5
+          - if:
+              - condition: state
+                entity_id: !input target_lights
+                state: "off"
+            then:
+              - action: input_boolean.turn_off
+                target:
+                  entity_id: !input auto_flag
