@@ -4,7 +4,9 @@ blueprint:
     Turns lights on when motion is detected in low light and turns them off
     after a configurable period without motion, but only when this automation
     switched them on. Failed turn-off commands are retried, and ownership is
-    retained until every controlled light reports off.
+    retained until every controlled light reports off. Switching a controlled
+    light on manually (app, dashboard, voice, wall switch) releases ownership,
+    so manually switched lights are never turned off by this automation.
   domain: automation
   author: BennyPirates
   source_url: https://raw.githubusercontent.com/BennyPirates/home-assistant-motion-light-blueprints/main/blueprints/motion_light_auto_ownership.yaml
@@ -86,9 +88,43 @@ triggers:
     for:
       seconds: !input no_motion_wait
     id: no_motion_timeout
+  - trigger: state
+    entity_id: !input target_lights
+    not_from:
+      - unavailable
+      - unknown
+    not_to:
+      - unavailable
+      - unknown
+    id: light_changed
+
+conditions:
+  - alias: Ignore light changes caused by this automation (keeps the retry loop alive)
+    condition: template
+    value_template: >-
+      {{ trigger.id != 'light_changed'
+         or trigger.to_state.context.parent_id is none }}
 
 actions:
   - choose:
+      - alias: Manual light change releases ownership
+        conditions:
+          - condition: trigger
+            id: light_changed
+          - condition: state
+            entity_id: !input auto_flag
+            state: "on"
+          - condition: or
+            conditions:
+              - condition: template
+                value_template: "{{ trigger.to_state.state == 'on' }}"
+              - condition: state
+                entity_id: !input target_lights
+                state: "off"
+        sequence:
+          - action: input_boolean.turn_off
+            target:
+              entity_id: !input auto_flag
       - conditions:
           - condition: trigger
             id: motion_detected

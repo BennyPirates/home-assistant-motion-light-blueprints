@@ -8,3 +8,8 @@ It supports separate guard lights and target lights for cases where an area
 must be dark before only a subset of its lights is switched on. Turn-off
 commands are retried up to three times; the ownership flag clears only after
 all controlled lights report off.
+
+Switching a controlled light on manually releases ownership, so the light stays
+on until it is switched off manually. Changes caused by the automation itself
+are recognised by their context (`parent_id`) and ignored, which keeps the
+turn-off retry loop intact.
