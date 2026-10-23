@@ -7,6 +7,8 @@ blueprint:
     retained until every controlled light reports off. Switching a controlled
     light on manually (app, dashboard, voice, wall switch) releases ownership,
     so manually switched lights are never turned off by this automation.
+    Attribute-only updates and late device state reports within 15 seconds
+    of an automatic switch-on are not treated as manual changes.
   domain: automation
   author: BennyPirates
   source_url: https://raw.githubusercontent.com/BennyPirates/home-assistant-motion-light-blueprints/main/blueprints/motion_light_auto_ownership.yaml
@@ -77,6 +79,9 @@ blueprint:
 mode: restart
 max_exceeded: silent
 
+variables:
+  auto_flag_entity: !input auto_flag
+
 triggers:
   - trigger: state
     entity_id: !input motion_sensor
@@ -99,11 +104,14 @@ triggers:
     id: light_changed
 
 conditions:
-  - alias: Ignore light changes caused by this automation (keeps the retry loop alive)
+  - alias: >-
+      Ignore light changes caused by this automation and attribute-only
+      updates (keeps the retry loop alive)
     condition: template
     value_template: >-
       {{ trigger.id != 'light_changed'
-         or trigger.to_state.context.parent_id is none }}
+         or (trigger.to_state.context.parent_id is none
+             and trigger.from_state.state != trigger.to_state.state) }}
 
 actions:
   - choose:
@@ -116,8 +124,14 @@ actions:
             state: "on"
           - condition: or
             conditions:
-              - condition: template
-                value_template: "{{ trigger.to_state.state == 'on' }}"
+              - alias: >-
+                  Switched on, but not a late device report within 15 s
+                  after this automation switched the lights on
+                condition: template
+                value_template: >-
+                  {{ trigger.to_state.state == 'on'
+                     and as_timestamp(now())
+                         - as_timestamp(states[auto_flag_entity].last_changed) > 15 }}
               - condition: state
                 entity_id: !input target_lights
                 state: "off"
