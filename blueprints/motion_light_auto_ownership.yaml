@@ -7,8 +7,10 @@ blueprint:
     retained until every controlled light reports off. Switching a controlled
     light on manually (app, dashboard, voice, wall switch) releases ownership,
     so manually switched lights are never turned off by this automation.
-    Attribute-only updates and late device state reports within 15 seconds
-    of an automatic switch-on are not treated as manual changes.
+    Attribute-only updates are ignored. A light reporting on counts as a
+    manual change only while no motion is detected and at least 30 seconds
+    after an automatic switch-on, so slow devices (e.g. Matter lights that
+    report 20+ seconds late) do not release ownership.
   domain: automation
   author: BennyPirates
   source_url: https://raw.githubusercontent.com/BennyPirates/home-assistant-motion-light-blueprints/main/blueprints/motion_light_auto_ownership.yaml
@@ -81,6 +83,7 @@ max_exceeded: silent
 
 variables:
   auto_flag_entity: !input auto_flag
+  motion_entity: !input motion_sensor
 
 triggers:
   - trigger: state
@@ -125,13 +128,14 @@ actions:
           - condition: or
             conditions:
               - alias: >-
-                  Switched on, but not a late device report within 15 s
-                  after this automation switched the lights on
+                  Switched on without motion and not a late device report
+                  within 30 s after this automation switched the lights on
                 condition: template
                 value_template: >-
                   {{ trigger.to_state.state == 'on'
+                     and is_state(motion_entity, 'off')
                      and as_timestamp(now())
-                         - as_timestamp(states[auto_flag_entity].last_changed) > 15 }}
+                         - as_timestamp(states[auto_flag_entity].last_changed) > 30 }}
               - condition: state
                 entity_id: !input target_lights
                 state: "off"
